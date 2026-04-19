@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>ShelfSense — try speech + text</title>
+  <link rel="stylesheet" href="/demo.css"/>
+</head>
+<body>
+  <main>
+    <h1>Try ShelfSense speech (same API as Spectacles)</h1>
+    <p class="muted">This page calls <code>POST /api/speech</code>, shows the line as text, and plays the returned MP3. With <code>TTS_ENGINE=auto</code>, the server currently uses <strong>Edge TTS</strong> for speech synthesis.</p>
+
+    <label for="speechText">What should ShelfSense say?</label>
+    <textarea id="speechText" rows="3" maxlength="500">Caution. Watch sodium and added sugar.</textarea>
+
+    <div class="row">
+      <button type="button" id="speakBtn">Generate &amp; play audio</button>
+      <span id="status" class="muted" aria-live="polite"></span>
+    </div>
+
+    <section id="out" class="panel hidden" aria-label="Result">
+      <h2>Spoken line (echo)</h2>
+      <p id="spokenLine"></p>
+      <h2>Audio</h2>
+      <audio id="player" controls></audio>
+    </section>
+
+    <p class="muted"><a href="/">← Back to home</a></p>
+  </main>
+  <script src="/demo.js"></script>
+</body>
+</html>

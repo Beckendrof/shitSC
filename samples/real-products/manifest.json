@@ -1,0 +1,46 @@
+{
+  "generatedAt": "2026-04-18T07:13:56.294Z",
+  "assets": [
+    {
+      "out": "cereal_box.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/f/f9/Aisles_4_and_5_in_Publix_Super_Market_at_Carrollwood_Square%2C_Tampa%2C_Florida%2C_Jan_2025.jpg",
+      "title": "File:Aisles 4 and 5 in Publix Super Market at Carrollwood Square, Tampa, Florida, Jan 2025.jpg",
+      "crop": {
+        "relLeft": 0.12,
+        "relTop": 0.18,
+        "relWidth": 0.76,
+        "relHeight": 0.55
+      }
+    },
+    {
+      "out": "snack_chips.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/3/34/Frito_Lay.JPG",
+      "title": "File:Frito Lay.JPG"
+    },
+    {
+      "out": "sauce_ketchup.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/5/57/Chef%E2%80%99s_Quality_Tomato_Ketchup_Packet.jpg",
+      "title": "File:Chef's Quality Tomato Ketchup Packet.jpg"
+    },
+    {
+      "out": "dairy_milk_carton.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/1/18/Informasi_Nilai_Gizi.jpg",
+      "title": "File:Informasi Nilai Gizi.jpg"
+    },
+    {
+      "out": "allergen_peanut_butter.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/9/94/Jif_Peanut_Butter_-_14938583767.jpg",
+      "title": "File:Jif Peanut Butter - 14938583767.jpg"
+    },
+    {
+      "out": "shelf_blurry_angle.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/b/b7/Extra_Coop_Supermarket%2C_Amfi_Shopping_mall%2C_Os%C3%B8yro%2C_Hordaland%2C_Norway%2C_Distorted%2C_blurred_panorama_2018-03-22._Vegetables_and_fruits%2C_apples%2C_pears%2C_bananas%2C_aisle%2C_display%2C_mirrors%2C_employee%2C_etc._%28gr%C3%B8nnsaks-_og_fruktavdeling%29_A.jpg",
+      "title": "File:Extra Coop Supermarket, Amfi Shopping mall, Osøyro, Hordaland, Norway, Distorted, blurred panorama 2018-03-22..."
+    },
+    {
+      "out": "dashcam_retail_motion.jpg",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/4/4a/Douglas_Square_Publix_pharmacy_drive-through%2C_Douglas_dashcam.jpg",
+      "title": "File:Douglas Square Publix pharmacy drive-through, Douglas dashcam.jpg"
+    }
+  ]
+}

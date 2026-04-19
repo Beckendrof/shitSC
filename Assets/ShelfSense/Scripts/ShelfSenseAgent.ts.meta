@@ -1,0 +1,83 @@
+- !<AssetImportMetadata/ccbcbd38-6eaf-4179-8404-b32b2236c42c>
+  ImportedAssetIds:
+    TypeScriptAsset: !<reference> e7d2d8d7-bfd0-4646-9b6f-43200614957e
+  ImporterName: TypeScriptAssetImporter
+  PrimaryAsset: !<reference> e7d2d8d7-bfd0-4646-9b6f-43200614957e
+  PackageType: NotAPackage
+  LegacyPackagePolicy: ~
+  ExtraData:
+    {}
+  AssetDataMap:
+    TypeScriptAsset: !<own> 257a36a6-384f-40f9-af49-a2b7d38a79b4
+  DependentFiles:
+    []
+  ImporterSettings: !<AssetImporterSettings>
+    {}
+  CompressionSettings: !<own> 00000000-0000-0000-0000-000000000000
+- !<TypeScriptAssetData/257a36a6-384f-40f9-af49-a2b7d38a79b4>
+  SvgIcon: ""
+  SetupScript:
+    code: ""
+  Description: ""
+  VersionMajor: 0
+  VersionMinor: 0
+  VersionPatch: 0
+  ComponentUid: 27d7ea06-5fe9-4272-8c3f-15da771e2274
+  ExportUid: 00000000-0000-0000-0000-000000000000
+  PackagePolicy: CanBeUnpacked
+  ScriptInputsHidden:
+    alternativesText: false
+    apiBaseUrl: false
+    audioPlayer: false
+    cameraModule: false
+    cartSummaryText: false
+    detailsText: false
+    headlineText: false
+    loadingIndicator: false
+    pinchInteractor: false
+    remoteMedia: false
+    remoteService: false
+    resultPanel: false
+    scanAnchor: false
+    statusRing: false
+  ScriptTypesHidden:
+    {}
+  ReadMe: !<reference> 00000000-0000-0000-0000-000000000000
+  DeclarationFile: !<reference> 00000000-0000-0000-0000-000000000000
+  Tags:
+    []
+  Attachments:
+    []
+  DefaultScriptInputs:
+    - cameraModule: !<reference.CameraModule> 00000000-0000-0000-0000-000000000000
+      remoteService: !<reference.InternetModule> 00000000-0000-0000-0000-000000000000
+      remoteMedia: !<reference.RemoteMediaModule> 00000000-0000-0000-0000-000000000000
+      apiBaseUrl: ""
+      pinchInteractor: !<reference.InteractionComponent> 00000000-0000-0000-0000-000000000000
+      headlineText: !<reference.Text> 00000000-0000-0000-0000-000000000000
+      detailsText: !<reference.Text> 00000000-0000-0000-0000-000000000000
+      alternativesText: !<reference.Text> 00000000-0000-0000-0000-000000000000
+      cartSummaryText: !<reference.Text> 00000000-0000-0000-0000-000000000000
+      loadingIndicator: !<reference.SceneObject> 00000000-0000-0000-0000-000000000000
+      statusRing: !<reference.SceneObject> 00000000-0000-0000-0000-000000000000
+      resultPanel: !<reference.SceneObject> 00000000-0000-0000-0000-000000000000
+      audioPlayer: !<reference.AudioComponent> 00000000-0000-0000-0000-000000000000
+      scanAnchor: !<reference.SceneObject> 00000000-0000-0000-0000-000000000000
+  ScriptTypes:
+    -
+      {}
+  InputLines:
+    - // @input Asset.CameraModule cameraModule
+    - // @input Asset.InternetModule remoteService
+    - // @input Asset.RemoteMediaModule remoteMedia
+    - // @input string apiBaseUrl
+    - // @input Component.InteractionComponent pinchInteractor
+    - // @input Component.Text headlineText
+    - // @input Component.Text detailsText
+    - // @input Component.Text alternativesText
+    - // @input Component.Text cartSummaryText
+    - // @input SceneObject loadingIndicator
+    - // @input SceneObject statusRing
+    - // @input SceneObject resultPanel
+    - // @input Component.AudioComponent audioPlayer
+    - // @input SceneObject scanAnchor

@@ -1,0 +1,41 @@
+body {
+  font-family: system-ui, sans-serif;
+  max-width: 40rem;
+  margin: 2rem auto;
+  padding: 0 1rem;
+  line-height: 1.5;
+}
+textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0.5rem 0 1rem;
+  font: inherit;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+button {
+  font: inherit;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+}
+.muted {
+  color: #555;
+  font-size: 0.95rem;
+}
+.panel {
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+}
+.hidden {
+  display: none;
+}
+code {
+  font-size: 0.9em;
+}

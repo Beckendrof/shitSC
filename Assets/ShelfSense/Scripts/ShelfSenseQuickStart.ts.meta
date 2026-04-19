@@ -1,0 +1,53 @@
+- !<AssetImportMetadata/063b3a0f-36f8-4504-a7ea-07b7af96695c>
+  ImportedAssetIds:
+    TypeScriptAsset: !<reference> 24f042ef-9fb0-48b4-b74e-ec216a2230a2
+  ImporterName: TypeScriptAssetImporter
+  PrimaryAsset: !<reference> 24f042ef-9fb0-48b4-b74e-ec216a2230a2
+  PackageType: NotAPackage
+  LegacyPackagePolicy: ~
+  ExtraData:
+    {}
+  AssetDataMap:
+    TypeScriptAsset: !<own> 22ea763f-d673-40f8-8355-a315132edd0a
+  DependentFiles:
+    []
+  ImporterSettings: !<AssetImporterSettings>
+    {}
+  CompressionSettings: !<own> 00000000-0000-0000-0000-000000000000
+- !<TypeScriptAssetData/22ea763f-d673-40f8-8355-a315132edd0a>
+  SvgIcon: ""
+  SetupScript:
+    code: ""
+  Description: ""
+  VersionMajor: 0
+  VersionMinor: 0
+  VersionPatch: 0
+  ComponentUid: 9c108309-5dc4-4c16-a0a9-5be0bffd712d
+  ExportUid: 00000000-0000-0000-0000-000000000000
+  PackagePolicy: CanBeUnpacked
+  ScriptInputsHidden:
+    apiKey: false
+    cameraModule: false
+    headlineText: false
+    internetModule: false
+  ScriptTypesHidden:
+    {}
+  ReadMe: !<reference> 00000000-0000-0000-0000-000000000000
+  DeclarationFile: !<reference> 00000000-0000-0000-0000-000000000000
+  Tags:
+    []
+  Attachments:
+    []
+  DefaultScriptInputs:
+    - apiKey: ""
+      headlineText: !<reference.Text> 00000000-0000-0000-0000-000000000000
+      cameraModule: !<reference.CameraModule> 00000000-0000-0000-0000-000000000000
+      internetModule: !<reference.InternetModule> 00000000-0000-0000-0000-000000000000
+  ScriptTypes:
+    -
+      {}
+  InputLines:
+    - // @input string apiKey
+    - // @input Component.Text headlineText
+    - // @input Asset.CameraModule cameraModule
+    - // @input Asset.InternetModule internetModule
