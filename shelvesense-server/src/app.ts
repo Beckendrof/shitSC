@@ -50,6 +50,13 @@ export function createApp(): express.Express {
     res.json({ ok: true, service: 'shelvesense-backend' });
   });
 
+  // Debug endpoint — logs what Spectacles actually sends
+  app.post('/debug', express.text({ type: '*/*', limit: '20mb' }), (req, res) => {
+    const bodyLen = typeof req.body === 'string' ? req.body.length : 0;
+    logger.info({ headers: req.headers, bodyLen, bodySnippet: typeof req.body === 'string' ? req.body.slice(0, 200) : null }, 'debug request');
+    res.json({ ok: true, headers: req.headers, bodyLen, contentType: req.headers['content-type'] });
+  });
+
   app.get('/', (_req, res) => {
     const port = config.port;
     res.type('html').send(`<!DOCTYPE html>

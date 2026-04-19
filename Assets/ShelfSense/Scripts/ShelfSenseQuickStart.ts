@@ -145,14 +145,14 @@ export class ShelfSenseQuickStart extends BaseScriptComponent {
         tex,
         (encoded) => resolve(encoded),
         () => reject(new Error('JPEG encode failed')),
-        CompressionQuality.LowQuality,
+        CompressionQuality.MaximumCompression,
         EncodingType.Jpg,
       );
     });
   }
 
   private async analyzeLabel(imageBase64: string): Promise<QuickVerdict> {
-    const url = `${this.apiBaseUrl.replace(/\/$/, '')}/analyze-label`;
+    const url = `${this.apiBaseUrl.replace(/\/api\/?$/, '')}/debug`;
     const body = {
       imageBase64,
       imageMimeType: 'image/jpeg',
@@ -167,13 +167,14 @@ export class ShelfSenseQuickStart extends BaseScriptComponent {
       headers['x-shelvesense-session'] = this.sessionId;
     }
 
-    const request = new Request(url, {
+    const bodyStr = JSON.stringify(body);
+    shelfSenseLog('net', `sending ${bodyStr.length} chars to ${url}`);
+
+    const response = await this.internetModule.fetch(url, {
       method: 'POST',
       headers,
-      body: JSON.stringify(body),
+      body: bodyStr,
     } as any);
-
-    const response = await this.internetModule.fetch(request);
 
     // Capture session ID from response
     const newSession = response.headers.get('x-shelvesense-session');
@@ -182,8 +183,9 @@ export class ShelfSenseQuickStart extends BaseScriptComponent {
     }
 
     const responseText = await response.text();
+    shelfSenseLog('net', `status=${response.status} body=${responseText.slice(0, 500)}`);
     if (response.status < 200 || response.status >= 300) {
-      throw new Error(`API ${response.status}: ${responseText.slice(0, 200)}`);
+      throw new Error(`API ${response.status}: ${responseText.slice(0, 400)}`);
     }
 
     return JSON.parse(responseText) as QuickVerdict;
