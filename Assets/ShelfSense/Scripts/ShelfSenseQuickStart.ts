@@ -2,7 +2,7 @@ import { shelfSenseLog } from './utils/logger';
 import { CooldownGate } from './utils/cooldown';
 import { SIK } from 'SpectaclesInteractionKit.lspkg/SIK';
 
-// ── Health profile sent with each request ──────────────────────────
+// ── Health profile sent with each request (must match server healthProfileSchema) ──
 const HEALTH_PROFILE = {
   cholesterol: 'high',
   bloodSugar: 'at-risk',
@@ -14,7 +14,7 @@ const HEALTH_PROFILE = {
   notes: '',
 };
 
-// ── Verdict result shape ───────────────────────────────────────────
+// ── Verdict result shape (subset of server LabelAnalysis) ─────────────────
 interface QuickVerdict {
   verdict: 'Safe' | 'Caution' | 'Avoid';
   reason: string;
@@ -23,18 +23,22 @@ interface QuickVerdict {
   better_alternatives: { name: string; why_better: string }[];
 }
 
-// ── Auto-reset delay (ms) ──────────────────────────────────────────
+// ── Auto-reset delay (ms) ───────────────────────────────────────────────
 const RESET_DELAY_MS = 10000;
 
 /**
- * ShelfSense: pinch → capture → backend API → AR verdict.
+ * ShelfSense: pinch → capture → ShelfSense API on Railway → AR verdict.
  *
- * Calls your shelvesense-server (which calls Claude).
- * Set `apiBaseUrl` to your ngrok/deployed HTTPS URL + /api.
+ * In Snap **developers.snap.com**, register your Railway **public HTTPS host**
+ * (e.g. `https://your-service.up.railway.app`) on the Remote Service / API Spec,
+ * with **max request size ≥ 1MB** (default 1000 bytes will break label scans).
+ *
+ * Remote Service Module → Api Spec Id = that spec’s UUID.
+ * Inspector → `apiBaseUrl` = same origin + `/api`, e.g. `https://your-service.up.railway.app/api`
  */
 @component
 export class ShelfSenseQuickStart extends BaseScriptComponent {
-  /** Backend URL, e.g. https://abc123.ngrok-free.app/api (no trailing slash). */
+  /** Backend base URL ending in `/api`, e.g. https://xxx.up.railway.app/api */
   @input apiBaseUrl: string;
 
   /** Text component for displaying the verdict in AR. */
@@ -48,7 +52,6 @@ export class ShelfSenseQuickStart extends BaseScriptComponent {
 
   private readonly cooldown = new CooldownGate(3000);
   private isScanning = false;
-  private sessionId: string | null = null;
 
   onAwake(): void {
     try {
@@ -57,16 +60,12 @@ export class ShelfSenseQuickStart extends BaseScriptComponent {
       this.setHeadline('ShelfSense ready\nPinch to scan a label');
       shelfSenseLog('init', 'ShelfSenseQuickStart ready');
 
-      // SIK pinch detection via HandInputData (works on Spectacles)
       const handInputData = SIK.HandInputData;
-      const rightHand = handInputData.getHand('right');
-      const leftHand = handInputData.getHand('left');
-
-      rightHand.onPinchDown.add(() => {
+      handInputData.getHand('right').onPinchDown.add(() => {
         shelfSenseLog('pinch', 'right hand pinch');
         void this.onPinch();
       });
-      leftHand.onPinchDown.add(() => {
+      handInputData.getHand('left').onPinchDown.add(() => {
         shelfSenseLog('pinch', 'left hand pinch');
         void this.onPinch();
       });
@@ -77,20 +76,21 @@ export class ShelfSenseQuickStart extends BaseScriptComponent {
   }
 
   private validateInputs(): boolean {
-    if (!this.apiBaseUrl || this.apiBaseUrl.length < 12) {
-      shelfSenseLog('init', 'Set apiBaseUrl in Inspector (e.g. https://abc.ngrok-free.app/api).');
+    const url = (this.apiBaseUrl ?? '').trim();
+    if (url.length < 16 || !url.startsWith('https://')) {
+      shelfSenseLog('init', 'Set apiBaseUrl in Inspector (https://…up.railway.app/api).');
       return false;
     }
     if (isNull(this.cameraModule)) {
-      shelfSenseLog('init', 'Assign cameraModule (CameraModule asset) in Inspector.');
+      shelfSenseLog('init', 'Assign cameraModule in Inspector.');
       return false;
     }
     if (isNull(this.headlineText)) {
-      shelfSenseLog('init', 'Assign headlineText (Text component) in Inspector.');
+      shelfSenseLog('init', 'Assign headlineText in Inspector.');
       return false;
     }
     if (isNull(this.internetModule)) {
-      shelfSenseLog('init', 'Assign internetModule (InternetModule asset) in Inspector.');
+      shelfSenseLog('init', 'Assign internetModule in Inspector.');
       return false;
     }
     return true;
@@ -108,23 +108,18 @@ export class ShelfSenseQuickStart extends BaseScriptComponent {
     shelfSenseLog('scan', 'pinch detected — capturing image');
 
     try {
-      // 1. Capture still image
       const imageRequest = CameraModule.createImageRequest();
       const frame = await this.cameraModule.requestImage(imageRequest);
 
-      // 2. Encode to base64 JPEG
       this.setHeadline('Analyzing label...');
       const b64 = await this.encodeTexture(frame.texture);
       shelfSenseLog('scan', `encoded image: ${b64.length} chars`);
 
-      // 3. Call backend /api/analyze-label
-      const analysis = await this.analyzeLabel(b64);
-      shelfSenseLog('verdict', JSON.stringify(analysis));
+      const verdict = await this.analyzeLabel(b64);
+      shelfSenseLog('verdict', JSON.stringify(verdict));
 
-      // 4. Display result
-      this.displayVerdict(analysis);
+      this.displayVerdict(verdict);
 
-      // 5. Auto-reset after delay
       const resetEvent = this.createEvent('DelayedCallbackEvent');
       resetEvent.bind(() => {
         this.setHeadline('ShelfSense ready\nPinch to scan a label');
@@ -152,43 +147,42 @@ export class ShelfSenseQuickStart extends BaseScriptComponent {
   }
 
   private async analyzeLabel(imageBase64: string): Promise<QuickVerdict> {
-    const url = `${this.apiBaseUrl.replace(/\/api\/?$/, '')}/debug`;
+    const base = this.apiBaseUrl.replace(/\/$/, '');
+    const url = `${base}/analyze-label`;
     const body = {
       imageBase64,
       imageMimeType: 'image/jpeg',
       healthProfile: HEALTH_PROFILE,
     };
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    };
-    if (this.sessionId) {
-      headers['x-shelvesense-session'] = this.sessionId;
-    }
-
     const bodyStr = JSON.stringify(body);
-    shelfSenseLog('net', `sending ${bodyStr.length} chars to ${url}`);
+    shelfSenseLog('net', `POST ${url} (${bodyStr.length} chars)`);
 
     const response = await this.internetModule.fetch(url, {
       method: 'POST',
-      headers,
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
       body: bodyStr,
     } as any);
 
-    // Capture session ID from response
-    const newSession = response.headers.get('x-shelvesense-session');
-    if (newSession) {
-      this.sessionId = newSession;
-    }
-
     const responseText = await response.text();
-    shelfSenseLog('net', `status=${response.status} body=${responseText.slice(0, 500)}`);
+    shelfSenseLog('net', `status=${response.status} body=${responseText.slice(0, 400)}`);
+
     if (response.status < 200 || response.status >= 300) {
-      throw new Error(`API ${response.status}: ${responseText.slice(0, 400)}`);
+      throw new Error(`API ${response.status}: ${responseText.slice(0, 200)}`);
     }
 
-    return JSON.parse(responseText) as QuickVerdict;
+    const parsed = JSON.parse(responseText) as Record<string, unknown>;
+    if (parsed && typeof parsed.error === 'object' && parsed.error !== null) {
+      const msg =
+        typeof (parsed.error as { message?: string }).message === 'string'
+          ? (parsed.error as { message: string }).message
+          : 'Server error';
+      throw new Error(msg);
+    }
+
+    return parsed as unknown as QuickVerdict;
   }
 
   private displayVerdict(v: QuickVerdict): void {
@@ -199,17 +193,15 @@ export class ShelfSenseQuickStart extends BaseScriptComponent {
 
     let display = `${emoji} ${v.verdict}\n${v.reason}`;
 
-    if (v.ingredients_flags && v.ingredients_flags.length > 0) {
+    if (v.ingredients_flags?.length > 0) {
       display += `\nFlagged: ${v.ingredients_flags.join(', ')}`;
     }
-
-    if (v.health_risks && v.health_risks.length > 0) {
+    if (v.health_risks?.length > 0) {
       display += `\nRisks: ${v.health_risks.join(', ')}`;
     }
 
     this.setHeadline(display);
 
-    // Full detail to Logger
     shelfSenseLog('display', `verdict=${v.verdict} reason=${v.reason}`);
     if (v.ingredients_flags?.length) shelfSenseLog('display', `flagged=${v.ingredients_flags.join(', ')}`);
     if (v.better_alternatives?.length) {

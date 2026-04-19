@@ -9,80 +9,63 @@
 
 **ShelfSense** is an XR grocery assistant running on **Snap Spectacles** (AR glasses).
 
-The user looks at a food product, performs a pinch gesture, and the glasses capture the label, send it **directly to the Claude API** (no server, no backend), and display a **Safe / Caution / Avoid** verdict in AR text — in real-time, in the aisle.
+The user looks at a food product, performs a pinch gesture, and the glasses capture the label, send it to a **Node.js API on Railway**, which calls **Claude vision**, then the lens shows a **Safe / Caution / Avoid** verdict in AR — in real time in the aisle.
 
 **Target users:** people with food allergies, pre-diabetes, hypertension, or glucose-sensitivity who need a health filter at the point of purchase — without carrying a dietitian.
 
 ---
 
-## Architecture (Current — Serverless)
+## Architecture (Current — Railway + Claude on server)
 
 ```
-[Snap Spectacles Hardware]
+[Snap Spectacles]
         |
-   Pinch Gesture
+   Pinch → CameraModule → JPEG base64 (MaximumCompression)
         |
-   CameraModule ──→ Still JPEG (base64 encoded, LowQuality)
+   InternetModule.fetch → POST https://<railway>/api/analyze-label
         |
-   InternetModule (fetch)
+   shelvesense-server (Express on Railway)
+        → Claude vision (API key stays on server)
         |
-   HTTPS POST directly to api.anthropic.com/v1/messages
-        |
-        ▼
-   Claude API (claude-opus-4) — vision model reads the label image
-        |
-   JSON verdict returned
-        |
-        ▼
-   [Lens renders AR UI]
-   headlineText → "✅ Safe" / "⚠️ Caution" / "🚫 Avoid"
-                → reason sentence
-                → flagged ingredients
-   Logger       → full verdict detail for debugging
+   JSON LabelAnalysis → lens maps to AR text + Logger
 ```
 
-**There is no local server. No Node.js. No ngrok. No Tesseract. No SQLite.**
-The glasses call the Anthropic API directly.
+**Hosting:** **Railway** (`*.up.railway.app`) — not behind Cloudflare in the same way as Render/Workers, so Spectacles can reach it once Snap’s **Remote Service** allowlist and **request size limits** are set correctly.
+
+**Do not point the lens at Cloudflare-fronted hosts** (e.g. `*.onrender.com`, `*.workers.dev`) for this use case unless you confirm Snap allows them — past testing showed **`status=0`** / no POST reaching the server.
 
 ---
 
-## What Was Removed (and Why)
+## Snap Remote Service (required)
 
-The original architecture had a Node.js/Express backend doing OCR and analysis locally. That entire layer was eliminated:
+Outbound HTTPS from Spectacles is gated by **developers.snap.com** Remote Service / API Spec registration, not only the Lens Studio Remote Service Module field.
 
-| Removed | Replacement | Reason |
-|---|---|---|
-| Node.js / Express server | Nothing — direct API call | Eliminates local dev dependency |
-| ngrok tunnel | Nothing — API is public HTTPS | No laptop needed during use |
-| Tesseract.js OCR | Claude vision | Claude reads the raw label image directly |
-| sharp image preprocessing | LowQuality JPEG compression in lens | Good enough for Claude; keeps payload small |
-| edge-tts / TTS audio | *(not yet re-implemented)* | Was server-side; needs rethinking for serverless |
-| SQLite cart tracking | *(not yet re-implemented)* | Was server-side; needs rethinking for serverless |
-| Session header pattern | *(removed)* | No server to hold session state |
-| `/api/analyze-label` endpoint | `https://api.anthropic.com/v1/messages` | Direct call |
-| `/api/cart/update` endpoint | *(not yet re-implemented)* | Future work |
-| `/api/speech` endpoint | *(not yet re-implemented)* | Future work |
-| `AI_ENGINE=mock` mode | *(removed)* | No backend to toggle |
+1. Register your **Railway public origin** (same host you put in `apiBaseUrl`, without path if the form asks for host only — follow Snap’s UI).
+2. Set **max request size** to at least **1 MB** (defaults like **1000 bytes** truncate ~300KB+ JSON and cause **400** / empty bodies before Express runs).
+3. Copy the **Api Spec Id** into Lens Studio → **Remote Service Module** → **Api Spec Id**.
 
 ---
 
 ## Tech Stack (Current)
 
-### XR Client (Lens Studio) — the only active layer
+### XR Client (Lens Studio)
 
 | Tech | Use |
 |---|---|
-| Lens Studio (Snap's IDE) | AR lens development for Spectacles |
-| TypeScript (Lens flavor) | All lens scripts |
-| Spectacles Interaction Kit (SIK) | Pinch gesture detection via PinchInteractor |
-| CameraModule | Captures still JPEG frame of the food label |
-| InternetModule / fetch() | Makes HTTPS call directly to Anthropic API |
-| Base64 (Lens built-in) | Encodes captured texture to JPEG base64 |
-| Anthropic API (claude-opus-4) | Vision model — reads label, returns JSON verdict |
+| Lens Studio | AR lens for Spectacles |
+| TypeScript (Lens flavor) | `ShelfSenseQuickStart.ts` |
+| SIK | Pinch detection |
+| CameraModule | Still JPEG of the label |
+| InternetModule | `fetch` to Railway `/api/analyze-label` |
+| Base64 | JPEG encoding |
 
-### Backend — DEPRECATED, do not modify
+### Backend (`shelvesense-server/`) — active, deployed to Railway
 
-The `shelvesense-server/` folder still exists in the repo but is fully unused. Do not suggest changes to it.
+| Tech | Use |
+|---|---|
+| Node.js + Express | REST API under `/api/...` |
+| Claude (vision) | Label reading + verdict JSON (see `visionService`, `config`) |
+| Env on Railway | `ANTHROPIC_API_KEY`, model IDs, `PORT`, etc. (see `shelvesense-server/.env.example`) |
 
 ---
 
@@ -101,36 +84,32 @@ shelfsense/
 │       ├── ui/resultRenderer.ts
 │       ├── ui/statusUI.ts
 │       └── utils/                     ← colors, cooldown, logger, network helpers
-└── shelvesense-server/                ← DEPRECATED — do not use or modify
+└── shelvesense-server/                ← Express API — deploy to Railway
 ```
 
 ---
 
 ## The Active Script: ShelfSenseQuickStart.ts
 
-This is the only script doing real work. Everything else is either deprecated or not yet wired up.
+This is the only script wired for pinch-to-scan in the default scene. `ShelfSenseAgent.ts` is optional / future.
 
 ### Flow (step by step)
 
 1. User pinches → `onPinch()` fires
-2. `CameraModule.requestImage()` captures a JPEG from the glasses camera
-3. `Base64.encodeTextureAsync()` encodes it at `LowQuality` (keeps payload small, reduces latency)
-4. `fetch()` POSTs to `https://api.anthropic.com/v1/messages` with:
-   - A **system prompt** containing the hardcoded health profile
-   - A **vision message** with the base64 image block
-   - A user text message asking for the JSON verdict
-5. Claude returns a JSON object — parsed and validated
-6. AR text updates on screen + full detail printed to Logger
-7. After 6 seconds, auto-resets to idle (ready to scan again)
+2. `CameraModule.requestImage()` captures a JPEG
+3. `Base64.encodeTextureAsync()` encodes with `MaximumCompression` to keep the JSON body smaller for proxies
+4. `internetModule.fetch()` POSTs JSON to `{apiBaseUrl}/analyze-label` with `imageBase64`, `imageMimeType`, `healthProfile`
+5. Server returns `LabelAnalysis` JSON — lens uses verdict fields for AR
+6. AR text + Logger; auto-reset after **10 s** (`RESET_DELAY_MS`)
 
 ### @input Fields (set in Lens Studio Inspector)
 
 | Field | Type | Value |
 |---|---|---|
-| `apiKey` | string | Your `sk-ant-...` Anthropic API key |
-| `headlineText` | Component.Text | A Text SceneObject in the scene |
-| `cameraModule` | Asset.CameraModule | Camera Module from Asset Browser |
-| `pinchInteractor` | Component.ScriptComponent | SIK PinchInteractor SceneObject |
+| `apiBaseUrl` | string | Railway API root, e.g. `https://your-service.up.railway.app/api` (no trailing slash) |
+| `headlineText` | Component.Text | Text SceneObject for verdict |
+| `cameraModule` | Asset.CameraModule | Camera Module asset |
+| `internetModule` | Asset.InternetModule | Internet Module asset |
 
 ### Hardcoded Health Profile (const in the script)
 
@@ -143,21 +122,18 @@ Located at the top of `ShelfSenseQuickStart.ts` as `HEALTH_PROFILE`:
 - Low sodium (flag > 140mg sodium per serving)
 ```
 
-### Claude API Config (const in the script)
-
-```typescript
-const CLAUDE_API_URL = "https://api.anthropic.com/v1/messages";
-const CLAUDE_MODEL   = "claude-opus-4-20250514";
-```
-
-### JSON Verdict Shape Claude Returns
+### JSON Verdict Shape (server `LabelAnalysis` — fields the lens displays)
 
 ```json
 {
   "verdict": "Safe" | "Caution" | "Avoid",
-  "reason": "One concise sentence explaining the verdict",
-  "flagged": ["ingredient or nutrient that triggered the flag"],
-  "alternatives": ["optional: 1-2 safer product suggestions"]
+  "reason": "string",
+  "ingredients_flags": ["string"],
+  "macro_breakdown": { "calories": "", "protein": "", "carbs": "", "fat": "", "sugar": "", "sodium": "" },
+  "health_risks": ["string"],
+  "better_alternatives": [{ "name": "", "why_better": "" }],
+  "cart_impact": { "summary": "", "running_score": "" },
+  "meal_plan_hint": ""
 }
 ```
 
@@ -188,12 +164,10 @@ Scene:
 
 ## What Is Not Done Yet (Future Work)
 
-These features existed in the original backend but were not re-implemented after the server was removed. They need a serverless-compatible approach:
-
-- **Voice / TTS** — original used `edge-tts` on the server. Serverless options: Lens Studio's `VoiceML` module, or a direct call to a TTS API (ElevenLabs, etc.)
-- **Cart tracking** — original tracked a running session health score in SQLite. Serverless option: Lens Studio's `PersistentStorageSystem`, or encode state inside the lens
-- **Dynamic health profile** — currently hardcoded. Could be made user-editable via a companion app or an `@input` string field
-- **`ShelfSenseAgent.ts`** — fully written but not wired up. Needs 14 `@input` fields and a full scene with `ResultPanel`, `StatusRing`, `LoadingIndicator`, `AudioPlayer` — none of those scene objects exist yet
+- **Voice / TTS** — server has `/api/speech`; not wired from this quick-start lens
+- **Cart tracking** — `/api/cart/update` + session headers exist on server; lens does not send cart state yet
+- **Dynamic health profile** — `HEALTH_PROFILE` is hardcoded in the lens; could be an `@input` or profile API
+- **`ShelfSenseAgent.ts`** — richer UI; not attached in the minimal scene
 
 ---
 
@@ -204,8 +178,8 @@ Paste this entire file, then describe your change. Examples:
 ### Change the health profile
 > "Update `HEALTH_PROFILE` in `ShelfSenseQuickStart.ts` — remove low sodium, add shellfish allergy."
 
-### Change the Claude model
-> "Switch from `claude-opus-4-20250514` to `claude-haiku-4-5-20251001` to reduce latency."
+### Change the Claude model (server-side)
+> "In `shelvesense-server` config / Railway env, set the vision model to Haiku for lower latency."
 
 ### Change the auto-reset timer
 > "Change the 6-second auto-reset to 10 seconds."
@@ -214,10 +188,10 @@ Paste this entire file, then describe your change. Examples:
 > "Show only the verdict word and emoji in AR text. Move reason and flagged items to Logger only."
 
 ### Add voice readout
-> "After displaying the verdict, read it aloud using Lens Studio's VoiceML module. No external API."
+> "Call `/api/speech` from the lens after verdict, or use Lens Studio VoiceML."
 
 ### Add cart tracking
-> "Add a scan counter using Lens Studio's PersistentStorageSystem — track how many Avoid vs Safe items scanned this session."
+> "Wire `x-shelvesense-session` from responses and POST `/api/cart/update` after each scan."
 
 ### Add scan cooldown
 > "Add a 3-second cooldown between pinches so the user can't accidentally double-scan."
@@ -232,7 +206,8 @@ Paste this entire file, then describe your change. Examples:
 - **Lens Studio version:** [fill in your version]
 - **Spectacles OS:** [fill in if known]
 - **SIK (Spectacles Interaction Kit) version:** [fill in if known]
-- **API key location:** Pasted into the `apiKey` @input field in Lens Studio Inspector — never put it in this file or commit it to git
+- **Anthropic API key:** Railway env vars only (`ANTHROPIC_API_KEY` / names in `.env.example`) — **never** in the lens or git
+- **Railway URL:** Pasted into `apiBaseUrl` in Lens Studio (Inspector on `ShelfSenseQuickStart`)
 
 ---
 
@@ -246,5 +221,5 @@ When making changes, always respect these — they are non-negotiable for Lens S
 4. **No `localStorage` or `XMLHttpRequest`** — use Lens Studio's `fetch()` and `InternetModule`
 5. **`@input` field types must use Lens Studio strings** — e.g. `"Component.Text"`, `"Asset.CameraModule"`, not TypeScript types
 6. **`Base64`, `CameraModule`, `InternetModule` are Lens Studio globals** — do not import them
-7. **`shelvesense-server/` is dead** — never suggest changes to it
+7. **`shelvesense-server/` is the Railway backend** — API keys and model config live there, not in the lens
 8. **`ShelfSenseAgent.ts` is untouched** — do not modify it unless explicitly asked
