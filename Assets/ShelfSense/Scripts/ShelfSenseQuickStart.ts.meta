@@ -26,7 +26,7 @@
   ExportUid: 00000000-0000-0000-0000-000000000000
   PackagePolicy: CanBeUnpacked
   ScriptInputsHidden:
-    apiKey: false
+    anthropicApiKey: false
     cameraModule: false
     headlineText: false
     internetModule: false
@@ -39,7 +39,7 @@
   Attachments:
     []
   DefaultScriptInputs:
-    - apiKey: ""
+    - anthropicApiKey: ""
       headlineText: !<reference.Text> 00000000-0000-0000-0000-000000000000
       cameraModule: !<reference.CameraModule> 00000000-0000-0000-0000-000000000000
       internetModule: !<reference.InternetModule> 00000000-0000-0000-0000-000000000000
@@ -47,7 +47,7 @@
     -
       {}
   InputLines:
-    - // @input string apiKey
+    - // @input string anthropicApiKey
     - // @input Component.Text headlineText
     - // @input Asset.CameraModule cameraModule
     - // @input Asset.InternetModule internetModule

@@ -9,30 +9,26 @@
 
 **ShelfSense** is an XR grocery assistant running on **Snap Spectacles** (AR glasses).
 
-The user looks at a food product, performs a pinch gesture, and the glasses capture the label, send it to a **Node.js API on Railway**, which calls **Claude vision**, then the lens shows a **Safe / Caution / Avoid** verdict in AR — in real time in the aisle.
+The user looks at a food product, performs a pinch gesture, and the glasses capture the label, send it **directly to the Claude API** (vision), then the lens shows a **Safe / Caution / Avoid** verdict in AR — in real time in the aisle.
 
 **Target users:** people with food allergies, pre-diabetes, hypertension, or glucose-sensitivity who need a health filter at the point of purchase — without carrying a dietitian.
 
 ---
 
-## Architecture (Current — Railway + Claude on server)
+## Architecture (Current — Direct Claude API)
 
 ```
 [Snap Spectacles]
         |
    Pinch → CameraModule → JPEG base64 (MaximumCompression)
         |
-   InternetModule.fetch → POST https://<railway>/api/analyze-label
+   InternetModule.fetch → POST https://api.anthropic.com/v1/messages
+        → Claude vision (Haiku) with system prompt + image
         |
-   shelvesense-server (Express on Railway)
-        → Claude vision (API key stays on server)
-        |
-   JSON LabelAnalysis → lens maps to AR text + Logger
+   JSON verdict → lens maps to AR text + Logger
 ```
 
-**Hosting:** **Railway** (`*.up.railway.app`) — not behind Cloudflare in the same way as Render/Workers, so Spectacles can reach it once Snap’s **Remote Service** allowlist and **request size limits** are set correctly.
-
-**Do not point the lens at Cloudflare-fronted hosts** (e.g. `*.onrender.com`, `*.workers.dev`) for this use case unless you confirm Snap allows them — past testing showed **`status=0`** / no POST reaching the server.
+**No backend server required** for the scan flow. The API key is set in the Lens Studio Inspector (`anthropicApiKey` field) and never committed to git.
 
 ---
 
@@ -40,9 +36,10 @@ The user looks at a food product, performs a pinch gesture, and the glasses capt
 
 Outbound HTTPS from Spectacles is gated by **developers.snap.com** Remote Service / API Spec registration, not only the Lens Studio Remote Service Module field.
 
-1. Register your **Railway public origin** (same host you put in `apiBaseUrl`, without path if the form asks for host only — follow Snap’s UI).
-2. Set **max request size** to at least **1 MB** (defaults like **1000 bytes** truncate ~300KB+ JSON and cause **400** / empty bodies before Express runs).
+1. Register **`https://api.anthropic.com`** as the allowed origin.
+2. Set **max request size** to at least **1 MB** (defaults like **1000 bytes** truncate ~300KB+ JSON and cause **400** / empty bodies).
 3. Copy the **Api Spec Id** into Lens Studio → **Remote Service Module** → **Api Spec Id**.
+4. In Lens Studio Inspector on `ShelfSenseQuickStart`, set **`anthropicApiKey`** to your `sk-ant-...` key.
 
 ---
 
@@ -56,7 +53,7 @@ Outbound HTTPS from Spectacles is gated by **developers.snap.com** Remote Servic
 | TypeScript (Lens flavor) | `ShelfSenseQuickStart.ts` |
 | SIK | Pinch detection |
 | CameraModule | Still JPEG of the label |
-| InternetModule | `fetch` to Railway `/api/analyze-label` |
+| InternetModule | `fetch` directly to `api.anthropic.com/v1/messages` |
 | Base64 | JPEG encoding |
 
 ### Backend (`shelvesense-server/`) — active, deployed to Railway
@@ -106,7 +103,7 @@ This is the only script wired for pinch-to-scan in the default scene. `ShelfSens
 
 | Field | Type | Value |
 |---|---|---|
-| `apiBaseUrl` | string | Railway API root, e.g. `https://your-service.up.railway.app/api` (no trailing slash) |
+| `anthropicApiKey` | string | Your `sk-ant-...` Anthropic API key — set in Inspector, never commit to git |
 | `headlineText` | Component.Text | Text SceneObject for verdict |
 | `cameraModule` | Asset.CameraModule | Camera Module asset |
 | `internetModule` | Asset.InternetModule | Internet Module asset |
@@ -122,7 +119,7 @@ Located at the top of `ShelfSenseQuickStart.ts` as `HEALTH_PROFILE`:
 - Low sodium (flag > 140mg sodium per serving)
 ```
 
-### JSON Verdict Shape (server `LabelAnalysis` — fields the lens displays)
+### JSON Verdict Shape (returned by Claude — fields the lens displays)
 
 ```json
 {
@@ -178,8 +175,8 @@ Paste this entire file, then describe your change. Examples:
 ### Change the health profile
 > "Update `HEALTH_PROFILE` in `ShelfSenseQuickStart.ts` — remove low sodium, add shellfish allergy."
 
-### Change the Claude model (server-side)
-> "In `shelvesense-server` config / Railway env, set the vision model to Haiku for lower latency."
+### Change the Claude model
+> "In `ShelfSenseQuickStart.ts` `analyzeLabel()`, change the model string to `claude-haiku-4-5-20251001` for lower latency."
 
 ### Change the auto-reset timer
 > "Change the 6-second auto-reset to 10 seconds."
@@ -206,8 +203,8 @@ Paste this entire file, then describe your change. Examples:
 - **Lens Studio version:** [fill in your version]
 - **Spectacles OS:** [fill in if known]
 - **SIK (Spectacles Interaction Kit) version:** [fill in if known]
-- **Anthropic API key:** Railway env vars only (`ANTHROPIC_API_KEY` / names in `.env.example`) — **never** in the lens or git
-- **Railway URL:** Pasted into `apiBaseUrl` in Lens Studio (Inspector on `ShelfSenseQuickStart`)
+- **Anthropic API key:** Set as `anthropicApiKey` in Lens Studio Inspector — **never** commit the `.lsproj` file publicly if it contains the key. Rotate in the Anthropic Console if exposed.
+- **Railway server:** Still exists in `shelvesense-server/` but is **not used** by the active scan flow. Can be used for future features (cart, speech, profile API).
 
 ---
 

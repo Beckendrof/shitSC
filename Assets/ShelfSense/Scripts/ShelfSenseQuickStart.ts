@@ -27,19 +27,18 @@ interface QuickVerdict {
 const RESET_DELAY_MS = 10000;
 
 /**
- * ShelfSense: pinch → capture → ShelfSense API on Railway → AR verdict.
+ * ShelfSense: pinch → capture → Claude API (direct) → AR verdict.
  *
- * In Snap **developers.snap.com**, register your Railway **public HTTPS host**
- * (e.g. `https://your-service.up.railway.app`) on the Remote Service / API Spec,
- * with **max request size ≥ 1MB** (default 1000 bytes will break label scans).
+ * In Snap **developers.snap.com**, register `https://api.anthropic.com` on the
+ * Remote Service / API Spec with **max request size ≥ 1MB**.
  *
  * Remote Service Module → Api Spec Id = that spec’s UUID.
- * Inspector → `apiBaseUrl` = same origin + `/api`, e.g. `https://your-service.up.railway.app/api`
+ * Inspector → `anthropicApiKey` = your `sk-ant-...` key (never commit this).
  */
 @component
 export class ShelfSenseQuickStart extends BaseScriptComponent {
-  /** Backend base URL ending in `/api`, e.g. https://xxx.up.railway.app/api */
-  @input apiBaseUrl: string;
+  /** Anthropic API key (sk-ant-...). Set in Inspector — never commit to git. */
+  @input anthropicApiKey: string;
 
   /** Text component for displaying the verdict in AR. */
   @input headlineText: Text;
@@ -76,9 +75,9 @@ export class ShelfSenseQuickStart extends BaseScriptComponent {
   }
 
   private validateInputs(): boolean {
-    const url = (this.apiBaseUrl ?? '').trim();
-    if (url.length < 16 || !url.startsWith('https://')) {
-      shelfSenseLog('init', 'Set apiBaseUrl in Inspector (https://…up.railway.app/api).');
+    const key = (this.anthropicApiKey ?? '').trim();
+    if (!key.startsWith('sk-ant-')) {
+      shelfSenseLog('init', 'Set anthropicApiKey in Inspector (sk-ant-...).');
       return false;
     }
     if (isNull(this.cameraModule)) {
@@ -147,21 +146,38 @@ export class ShelfSenseQuickStart extends BaseScriptComponent {
   }
 
   private async analyzeLabel(imageBase64: string): Promise<QuickVerdict> {
-    const base = this.apiBaseUrl.replace(/\/$/, '');
-    const url = `${base}/analyze-label`;
-    const body = {
-      imageBase64,
-      imageMimeType: 'image/jpeg',
-      healthProfile: HEALTH_PROFILE,
-    };
-    const bodyStr = JSON.stringify(body);
+    const url = 'https://api.anthropic.com/v1/messages';
+
+    const systemPrompt =
+      'You are a food label scanner for a user with these health conditions:\n' +
+      '- Peanut allergy (SEVERE — any peanut or tree nut = Avoid)\n' +
+      '- Diabetic / low sugar (flag > 10g sugar per serving)\n' +
+      '- Gluten-free (flag wheat, barley, rye, malt)\n' +
+      '- Low sodium (flag > 140mg sodium per serving)\n\n' +
+      'Respond ONLY with a JSON object in this exact shape, no markdown:\n' +
+      '{"verdict":"Safe","reason":"string","ingredients_flags":[],"health_risks":[],"better_alternatives":[]}';
+
+    const bodyStr = JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 512,
+      system: systemPrompt,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imageBase64 } },
+          { type: 'text', text: 'Analyze this food label and return the JSON verdict.' },
+        ],
+      }],
+    });
+
     shelfSenseLog('net', `POST ${url} (${bodyStr.length} chars)`);
 
     const response = await this.internetModule.fetch(url, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
+        'content-type': 'application/json',
+        'x-api-key': this.anthropicApiKey,
+        'anthropic-version': '2023-06-01',
       },
       body: bodyStr,
     } as any);
@@ -170,19 +186,30 @@ export class ShelfSenseQuickStart extends BaseScriptComponent {
     shelfSenseLog('net', `status=${response.status} body=${responseText.slice(0, 400)}`);
 
     if (response.status < 200 || response.status >= 300) {
-      throw new Error(`API ${response.status}: ${responseText.slice(0, 200)}`);
+      throw new Error(`Claude API ${response.status}: ${responseText.slice(0, 200)}`);
     }
 
-    const parsed = JSON.parse(responseText) as Record<string, unknown>;
-    if (parsed && typeof parsed.error === 'object' && parsed.error !== null) {
-      const msg =
-        typeof (parsed.error as { message?: string }).message === 'string'
-          ? (parsed.error as { message: string }).message
-          : 'Server error';
-      throw new Error(msg);
+    const apiResponse = JSON.parse(responseText) as { content: { type: string; text: string }[] };
+    const raw = (apiResponse.content?.[0]?.text ?? '').trim();
+
+    // Strip markdown code fences if present
+    const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+
+    // Find the JSON object boundaries in case there's surrounding text
+    const start = stripped.indexOf('{');
+    const end = stripped.lastIndexOf('}');
+    if (start === -1 || end === -1) {
+      // Claude couldn't see a label — return a Caution so the lens shows something useful
+      return {
+        verdict: 'Caution',
+        reason: stripped.slice(0, 200) || 'No label visible — point at a food product and rescan.',
+        ingredients_flags: [],
+        health_risks: [],
+        better_alternatives: [],
+      };
     }
 
-    return parsed as unknown as QuickVerdict;
+    return JSON.parse(stripped.slice(start, end + 1)) as QuickVerdict;
   }
 
   private displayVerdict(v: QuickVerdict): void {
