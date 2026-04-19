@@ -125,12 +125,6 @@ Key endpoints:
 
 ---
 
-## Security
-
-- **Never commit your API key.** Set it in Lens Studio Inspector only. Rotate immediately at [console.anthropic.com](https://console.anthropic.com) if it leaks.
-
----
-
 ## What's not done yet
 
 - Voice readout — server has `/api/speech`; not wired from the lens
