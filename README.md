@@ -128,7 +128,6 @@ Key endpoints:
 ## Security
 
 - **Never commit your API key.** Set it in Lens Studio Inspector only. Rotate immediately at [console.anthropic.com](https://console.anthropic.com) if it leaks.
-- `Assets/Scene.scene` stores Inspector values — verify it does not contain your key before pushing.
 
 ---
 
